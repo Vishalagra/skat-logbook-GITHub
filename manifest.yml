@@ -1,0 +1,12 @@
+applications:
+- path: .
+  memory: 512M
+  instances: 1
+  domain: mybluemix.net
+  name: skat-logbook
+  host: skat-logbook
+  disk_quota: 1024M
+  services:
+  - skat-logbook-cloudantNoSQLDB
+  - availability-monitoring-auto
+  - Blockchain-logbook
