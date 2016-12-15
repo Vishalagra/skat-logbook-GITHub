@@ -39,6 +39,8 @@ type SKATEmployee struct{
 		Comment string `json:"Comments"`
 }
 
+var employeeLogBog map[string]SKATEmployee
+
 type SKATEmployeeRepository struct{
 	EmployeeList []SKATEmployee `json:"employee_list"`
 }
@@ -77,8 +79,10 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface, function stri
 		return t.Init(stub, "init", args)
 	} else if function == "write" {
 		return t.write(stub, args)
-	} else if  function == "addSKATEmployee" {
+	} else if  function == "addToLogBog" {
 		return t.addSKATEmployee(stub, args)
+	} else if  function == "updateLogBog" {
+		return t.updateSKATEmployee(stub, args)
 	}
 	fmt.Println("invoke did not find func: " + function)
 
@@ -92,6 +96,8 @@ func (t *SimpleChaincode) Query(stub shim.ChaincodeStubInterface, function strin
 	// Handle different functions
 	if function == "read" { //read a variable
 		return t.read(stub, args)
+	} else if function == "searchLogBog" {
+		return t.searchSKATEmployee(stub,args)
 	}
 	fmt.Println("query did not find func: " + function)
 
@@ -141,14 +147,8 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 // ============================================================================================================================
 func (t *SimpleChaincode) addSKATEmployee(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
 	var err error
-	var key string
+	var key,jsonResp string
 	
-	// CPRNum int `json:"CPRNum"`
-    // VirkNum int `json:"VirkNum"`
-      //  CPRNavn string `json:"CPRNavn"`
-       // DOW string `json:"DOW"`
-	//NoOfHours int `json:"NoOfHours"`
-	//Comment string `json:"Comments"`
 	//   0       1       2     3
 	// "asdf", "blue", "35", "bob"
 	if len(args) != 5 {
@@ -190,13 +190,282 @@ func (t *SimpleChaincode) addSKATEmployee(stub shim.ChaincodeStubInterface, args
 		return jsonAsBytes, err
 	}
 	
-	var  employeeRepository SKATEmployeeRepository
-	employeeRepository.EmployeeList = append(employeeRepository.EmployeeList,Employee)
-    key = strconv.Itoa(Employee.CPRNum)
+	key = strconv.Itoa(Employee.CPRNum) + "_" + strconv.Itoa(Employee.VirkNum) + "_" + Employee.DateOfWork
 	err = stub.PutState(key, jsonAsBytes)	//store employee with id as key
 	if err != nil {
 		return nil, err
-	}								
+	}	
+	//var  employeeRepository SKATEmployeeRepository
+	//employeeRepository.EmployeeList = append(employeeRepository.EmployeeList,Employee)
+	//SKATEmployeeRepository.EmployeeList = append(SKATEmployeeRepository.EmployeeList,Employee)
+	repositoryJsonAsBytes, err := stub.GetState("SKATEmployeeRepository")
+	if err != nil {
+		jsonResp = "{\"Error\":\"Failed to get state for " + "SKATEmployeeRepository" + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+	var employeeRepository SKATEmployeeRepository
+	json.Unmarshal(repositoryJsonAsBytes, &employeeRepository)	
+
+
+   	employeeRepository.EmployeeList = append(employeeRepository.EmployeeList,Employee)
+	//update Employee Repository
+	updatedRepositoryJsonAsBytes, _  := json.Marshal(employeeRepository)
+	err = stub.PutState("SKATEmployeeRepository", updatedRepositoryJsonAsBytes)	//store employee with id as key
+	if err != nil {
+		return nil, err
+	}		
+	fmt.Println("len(employeeRepository) in Add:"+ strconv.Itoa(len(employeeRepository.EmployeeList)));	
+	fmt.Println("employeeRepository:", employeeRepository.EmployeeList[0:])					
 	fmt.Println("- end add Employee 2")
 	return jsonAsBytes, nil
 }
+
+// ============================================================================================================================
+// Search Employees
+// ============================================================================================================================
+func (t *SimpleChaincode) searchSKATEmployee(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	var cprNo, virkNo, cprForEmployee , virkForEmployee string
+	var jsonResp  string
+	var err error
+	var foundEmployee bool
+	foundEmployee = false
+	//var SearchedEmployeeList []SKATEmployee 
+
+	SearchedEmployeeList := []SKATEmployee{}
+	
+	if len(args) != 2 {
+		return nil, errors.New("Incorrect number of arguments. Expecting CPRNum , VirkNum as input")
+	}
+
+	cprNo = args[0]
+	virkNo = args[1]
+  	
+	repositoryJsonAsBytes, err := stub.GetState("SKATEmployeeRepository")
+	if err != nil {
+		jsonResp = "{\"Error\":\"Failed to get state for " + "SKATEmployeeRepository" + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+	var employeeRepository SKATEmployeeRepository
+	json.Unmarshal(repositoryJsonAsBytes, &employeeRepository)	
+	
+	fmt.Println("len(employeeRepository) in search:"+ strconv.Itoa(len(employeeRepository.EmployeeList)));
+	/*for i := range employeeRepository.EmployeeList{
+		cprForEmployee = strconv.Itoa(employeeRepository.EmployeeList[i].CPRNum)
+		fmt.Println("matching record:"+ strconv.Itoa(i))
+		//fmt.Println("looking at " + strconv.FormatInt(trades.OpenTrades[i].Timestamp, 10) + " for " + strconv.FormatInt(timestamp, 10))
+		if 	(strings.Contains(cprForEmployee,cprNo) || strings.Contains(virkForEmployee,virkNo)){
+			fmt.Println("found the employee 1");
+			SearchedEmployeeList = append(SearchedEmployeeList,employeeRepository.EmployeeList[i])
+			fmt.Println("found the employee 2"+ SearchedEmployeeList[i].CPRNavn );
+			fmt.Println("SearchedEmployeeList[:"+ strconv.Itoa(i) +"] ==", SearchedEmployeeList[i])		
+		}
+	}*/
+	//jsonAsBytes, _ := json.Marshal(len(SearchedEmployeeList[:]))
+	fmt.Println("searching cpr Number:"+ cprNo + " Virk Num:"+ virkNo)
+	fmt.Println("len(cprNo):"+ strconv.Itoa(len(cprNo)))
+	fmt.Println("len(virkNo):"+ strconv.Itoa(len(virkNo)))
+	fmt.Println("len(cprNo)==0:"+ strconv.FormatBool(len(cprNo)==0))
+	fmt.Println("len(virkNo)==0:"+ strconv.FormatBool(len(virkNo)==0))
+	result := "["
+	
+	for _,skatEmployee := range employeeRepository.EmployeeList{
+		foundEmployee = false
+		cprForEmployee = strconv.Itoa(skatEmployee.CPRNum)
+		virkForEmployee= strconv.Itoa(skatEmployee.VirkNum)
+		fmt.Println("matching record")
+		if ( len(cprNo) >0 && len (virkNo) >0 ){
+			fmt.Println("matching both")
+			if (cprForEmployee == cprNo && virkForEmployee == virkNo ){
+				foundEmployee=true
+				fmt.Println("found both")
+				}
+		} else if ((len(cprNo) > 0) && (len(virkNo)==0)) {
+			fmt.Println("matching cprNo")
+			if cprForEmployee == cprNo {
+				foundEmployee=true
+				fmt.Println("found cprNo")
+				}
+		} else if ((len(virkNo) > 0)  && (len(cprNo)==0)) {
+			fmt.Println("matching virkNo")
+			if virkForEmployee == virkNo {
+				foundEmployee=true
+				fmt.Println("found virkNo")
+				}
+		}
+		fmt.Println("foundEmployee : " + strconv.FormatBool(foundEmployee))
+		//fmt.Println("looking at " + strconv.FormatInt(trades.OpenTrades[i].Timestamp, 10) + " for " + strconv.FormatInt(timestamp, 10))
+		if 	(foundEmployee == true){
+			SearchedEmployeeList = append(SearchedEmployeeList,skatEmployee)
+			fmt.Println("found the employee-"+ skatEmployee.CPRNavn );
+			temp, err := json.Marshal(skatEmployee)
+			if err == nil {
+			result += string(temp) + ","
+			}
+		}
+	}
+	if len(result) == 1 {
+		result = "[]"
+	} else {
+		result = result[:len(result)-1] + "]"
+	}	
+	fmt.Println("SearchedEmployeeList:", SearchedEmployeeList[0:])
+/*	var interfaceSlice []interface{} = make([]interface{}, len(SearchedEmployeeList))
+	for i, skatEmployee := range SearchedEmployeeList {
+    interfaceSlice[i] = skatEmployee
+	jsonAsBytes, _ := json.Marshal(interfaceSlice)
+	}*/
+		
+	return []byte(result), nil
+
+}
+// ============================================================================================================================
+// Update Employee - Update Employee with Comments, store into chaincode state
+// ============================================================================================================================
+func (t *SimpleChaincode) updateSKATEmployee(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+var cprNum,virkNum, dateOfWork,comment, key,jsonResp string
+var employee SKATEmployee
+var err error
+
+if len(args) != 4 {
+		return nil, errors.New("Incorrect number of arguments. Expecting CPRNum , Comments as input")
+	}
+
+cprNum=args[0]
+virkNum=args[1]
+dateOfWork=args[2]
+comment=args[3]
+employee , err= t.getEmployeeLog(stub,cprNum,virkNum,dateOfWork)
+fmt.Println("Updating Employee -"+ strconv.Itoa(employee.CPRNum) +" "+ strconv.Itoa(employee.VirkNum)+" "+ employee.DateOfWork)
+employee.Comment = comment
+key = strconv.Itoa(employee.CPRNum) + "_" + strconv.Itoa(employee.VirkNum) + "_" + employee.DateOfWork
+jsonAsBytes, _ := json.Marshal(employee)
+err = stub.PutState(key, jsonAsBytes) //write the variable into the chaincode state
+fmt.Println("Updated Employee with key-"+key)
+
+if err != nil {
+		jsonResp = "{\"Error\":\"Failed to update Employee" + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+_, err = t.updateEmployeeRepository(stub,employee)
+if err != nil {
+		jsonResp = "{\"Error\":\"Failed to update SKAT Repository" + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+
+return jsonAsBytes,nil
+}
+
+//==================================================================================================================================
+//Append to EmployeeRepository
+//===================================================================================================================================
+
+func (t *SimpleChaincode) appendtoEmployeeRepository(stub shim.ChaincodeStubInterface,  key string,employee SKATEmployee) (bool, error){
+
+var jsonResp string 
+repositoryJsonAsBytes, err := stub.GetState("SKATEmployeeRepository")
+	if err != nil {
+		jsonResp = "{\"Error\":\"Failed to get state for " + "SKATEmployeeRepository" + "\"}"
+		return false, errors.New(jsonResp)
+	}
+	var employeeRepository SKATEmployeeRepository
+	json.Unmarshal(repositoryJsonAsBytes, &employeeRepository)	
+
+	employeeRepository.EmployeeList = append(employeeRepository.EmployeeList,employee)
+	//update Employee Repository
+	updatedRepositoryJsonAsBytes, _  := json.Marshal(employeeRepository)
+	err = stub.PutState("SKATEmployeeRepository", updatedRepositoryJsonAsBytes)	//store employee with id as key
+	if err != nil {
+		return false, err
+	}		
+	return true, nil
+}
+// ============================================================================================================================
+// Get single Employee
+// ============================================================================================================================
+func (t *SimpleChaincode) getEmployee(stub shim.ChaincodeStubInterface, cprNum string) (SKATEmployee, error) {
+
+	var jsonResp, cprForEmployee  string
+	var employee SKATEmployee
+	
+	repositoryJsonAsBytes, err := stub.GetState("SKATEmployeeRepository")
+	if err != nil {
+		jsonResp = "{\"Error\":\"Failed to get state for " + "SKATEmployeeRepository" + "\"}"
+		return employee, errors.New(jsonResp)
+	}
+	var employeeRepository SKATEmployeeRepository
+	json.Unmarshal(repositoryJsonAsBytes, &employeeRepository)	
+	
+	for _,skatEmployee := range employeeRepository.EmployeeList{
+		cprForEmployee = strconv.Itoa(skatEmployee.CPRNum)
+		
+		fmt.Println("matching record")
+		//fmt.Println("looking at " + strconv.FormatInt(trades.OpenTrades[i].Timestamp, 10) + " for " + strconv.FormatInt(timestamp, 10))
+		if 	(strings.Contains(cprForEmployee,cprNum)){
+			fmt.Println("found the employee 1" + skatEmployee.CPRNavn );
+			employee=skatEmployee
+			}
+		
+		}
+			return employee, nil
+	
+	}
+	// ============================================================================================================================
+// Get single Employee
+// ============================================================================================================================
+func (t *SimpleChaincode) getEmployeeLog(stub shim.ChaincodeStubInterface, cprNum string,VirkNum string ,DateOfWork string) (SKATEmployee, error) {
+
+	var employee SKATEmployee
+	var key string
+	key=cprNum+"_"+VirkNum+"_"+DateOfWork
+	bytes, err := stub.GetState(key)
+
+	if err != nil {
+			fmt.Printf("getEmployeeLog: Failed to find employee Log: %s", err); 
+			return employee, errors.New("getEmployeeLog: Failed to find employee Log with these details: %s"+ cprNum+" "+VirkNum+" "+DateOfWork) 
+		}
+
+	err = json.Unmarshal(bytes, &employee);
+
+	return employee, nil
+	
+	}
+
+//==================================================================================================================================
+//Replace Record in EmployeeRepository
+//===================================================================================================================================
+
+func (t *SimpleChaincode) updateEmployeeRepository(stub shim.ChaincodeStubInterface, employee SKATEmployee) (bool, error){
+
+var jsonResp,cprForEmployee,virkNumForEmployee, dateOfWorkForEmployee string 
+repositoryJsonAsBytes, err := stub.GetState("SKATEmployeeRepository")
+	if err != nil {
+		jsonResp = "{\"Error\":\"Failed to get state for " + "SKATEmployeeRepository" + "\"}"
+		return false, errors.New(jsonResp)
+	}
+	var initialEmployeeRepository,finalEmployeeRepository SKATEmployeeRepository
+	json.Unmarshal(repositoryJsonAsBytes, &initialEmployeeRepository)	
+	
+	for _,skatEmployee := range initialEmployeeRepository.EmployeeList{
+		cprForEmployee = strconv.Itoa(skatEmployee.CPRNum)
+		virkNumForEmployee= strconv.Itoa(skatEmployee.VirkNum)
+		dateOfWorkForEmployee=skatEmployee.DateOfWork
+		fmt.Println("matching record")
+		//fmt.Println("looking at " + strconv.FormatInt(trades.OpenTrades[i].Timestamp, 10) + " for " + strconv.FormatInt(timestamp, 10))
+		if 	((cprForEmployee == strconv.Itoa(employee.CPRNum)) && (virkNumForEmployee == strconv.Itoa(employee.VirkNum)) && (dateOfWorkForEmployee == employee.DateOfWork) ){
+			fmt.Println("found the employee 1" + skatEmployee.CPRNavn );
+			//do not copy
+			} else {//copy
+				finalEmployeeRepository.EmployeeList = append(finalEmployeeRepository.EmployeeList,skatEmployee)	
+			}
+		
+		}
+	finalEmployeeRepository.EmployeeList = append(finalEmployeeRepository.EmployeeList,employee)
+	//update Employee Repository
+	updatedRepositoryJsonAsBytes, _  := json.Marshal(finalEmployeeRepository)
+	err = stub.PutState("SKATEmployeeRepository", updatedRepositoryJsonAsBytes)	//store employee with id as key
+	if err != nil {
+		return false, err
+	}		
+	return true, nil
+}
+	
